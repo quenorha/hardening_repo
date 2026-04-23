@@ -65,8 +65,9 @@ install_package() {
     log_info "Downloading from $IPK_URL"
     wget -q -O "$IPK_FILE" "$IPK_URL" || log_error "Download failed"
 
-    log_info "Installing package"
-    opkg install --force-reinstall -V3 "$IPK_FILE" || log_error "opkg installation failed"
+    log_info "Installing package (silent)"
+    opkg install --force-reinstall -V0 "$IPK_FILE" || log_error "opkg installation failed"
+    log_info "Package installed: OK"
 
     rm -f "$IPK_FILE"
 
