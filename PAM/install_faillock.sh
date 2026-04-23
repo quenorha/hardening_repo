@@ -1,7 +1,7 @@
 #!/bin/sh
 # =============================================================================
 # install_faillock.sh
-# Installation and configuration of pam_faillock on WAGO PFC200/PFC300
+# Installation and configuration of pam_faillock on WAGO Linux controllers
 # Reference: ANSSI-PG-078 R10
 #
 # Usage:
@@ -11,7 +11,7 @@
 
 set -e
 
-REPO_BASE_URL="https://github.com/quenorha/hardening_repo/raw/refs/heads/main"
+REPO_BASE_URL="https://github.com/quenorha/hardening_repo/raw/refs/heads/main/PAM"
 IPK_FILE="/tmp/pam_faillock.ipk"
 
 FAILLOCK_DIR="/var/run/faillock"
@@ -39,18 +39,17 @@ detect_arch() {
     ARCH=$(uname -m)
     case "$ARCH" in
         armv7l|armv6l)
-            IPK_NAME="pam_1.5.3_armhf.ipk"
-            log_info "Architecture detected: armhf (PFC200 G2)"
+            IPK_URL="${REPO_BASE_URL}/packages/arm32/pam_1.5.3_armhf.ipk"
+            log_info "Architecture detected: arm32 (PFC200 G2)"
             ;;
         aarch64)
-            IPK_NAME="pam_1.5.3_arm64.ipk"
+            IPK_URL="${REPO_BASE_URL}/packages/arm64/pam_1.5.3_arm64.ipk"
             log_info "Architecture detected: arm64 (PFC300)"
             ;;
         *)
             log_error "Unsupported architecture: $ARCH"
             ;;
     esac
-    IPK_URL="${REPO_BASE_URL}/${IPK_NAME}"
 }
 
 # =============================================================================
@@ -89,7 +88,7 @@ install_package() {
         log_warning "pam_faillock.so already present — reinstalling"
     fi
 
-    log_info "Downloading $IPK_NAME from $IPK_URL"
+    log_info "Downloading from $IPK_URL"
     wget -q -O "$IPK_FILE" "$IPK_URL" || log_error "Download failed"
 
     log_info "Installing package (silent)"
@@ -258,7 +257,7 @@ verify() {
 
 uninstall() {
     printf "=============================================\n"
-    printf " pam_faillock uninstall — WAGO PFC200/PFC300\n"
+    printf " pam_faillock uninstall — WAGO Linux controllers\n"
     printf "=============================================\n\n"
 
     log_warning "Restoring original configuration"
