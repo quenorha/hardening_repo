@@ -1,7 +1,7 @@
 #!/bin/sh
 # =============================================================================
 # install_faillock.sh
-# Installation and configuration of pam_faillock on WAGO PFC200
+# Installation and configuration of pam_faillock on WAGO PFC200/PFC300
 # Reference: ANSSI-PG-078 R10
 #
 # Usage:
@@ -11,7 +11,7 @@
 
 set -e
 
-IPK_URL="https://github.com/quenorha/hardening_repo/raw/refs/heads/main/pam_1.5.3_armhf.ipk"
+REPO_BASE_URL="https://github.com/quenorha/hardening_repo/raw/refs/heads/main"
 IPK_FILE="/tmp/pam_faillock.ipk"
 
 FAILLOCK_DIR="/var/run/faillock"
@@ -32,6 +32,28 @@ log_warning() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 log_error()   { printf "${RED}[ERROR]${NC} %s\n" "$1"; exit 1; }
 
 # =============================================================================
+# Architecture detection
+# =============================================================================
+
+detect_arch() {
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        armv7l|armv6l)
+            IPK_NAME="pam_1.5.3_armhf.ipk"
+            log_info "Architecture detected: armhf (PFC200 G2)"
+            ;;
+        aarch64)
+            IPK_NAME="pam_1.5.3_arm64.ipk"
+            log_info "Architecture detected: arm64 (PFC300)"
+            ;;
+        *)
+            log_error "Unsupported architecture: $ARCH"
+            ;;
+    esac
+    IPK_URL="${REPO_BASE_URL}/${IPK_NAME}"
+}
+
+# =============================================================================
 # Pre-flight checks
 # =============================================================================
 
@@ -44,7 +66,7 @@ check_root() {
 
 check_user_authd() {
     if ! grep -q "^authd:" /etc/passwd; then
-        log_error "User authd not found — this script is intended for WAGO PFC200"
+        log_error "User authd not found — this script is intended for WAGO PFC200/PFC300"
     fi
     log_info "User authd found: OK"
 }
@@ -67,7 +89,7 @@ install_package() {
         log_warning "pam_faillock.so already present — reinstalling"
     fi
 
-    log_info "Downloading from $IPK_URL"
+    log_info "Downloading $IPK_NAME from $IPK_URL"
     wget -q -O "$IPK_FILE" "$IPK_URL" || log_error "Download failed"
 
     log_info "Installing package (silent)"
@@ -236,7 +258,7 @@ verify() {
 
 uninstall() {
     printf "=============================================\n"
-    printf " pam_faillock uninstall — WAGO PFC200\n"
+    printf " pam_faillock uninstall — WAGO PFC200/PFC300\n"
     printf "=============================================\n\n"
 
     log_warning "Restoring original configuration"
@@ -318,7 +340,7 @@ case "$1" in
         trap rollback ERR
 
         printf "=============================================\n"
-        printf " pam_faillock installation — WAGO PFC200\n"
+        printf " pam_faillock installation — WAGO Linux controllers\n"
         printf " Reference: ANSSI-PG-078 R10\n"
         printf "=============================================\n\n"
 
@@ -328,6 +350,7 @@ case "$1" in
         check_root
         check_user_authd
         check_pam
+        detect_arch
         install_package
         install_init_script
         create_tally_dir
