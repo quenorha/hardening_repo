@@ -1,7 +1,12 @@
 #!/bin/sh
 # =============================================================================
 # install_faillock.sh
-# Installation and configuration of pam_faillock on WAGO Linux Controllers
+# Installation and configuration of pam_faillock on WAGO PFC200
+# Reference: ANSSI-PG-078 R10
+#
+# Usage:
+#   ./install_faillock.sh           — install
+#   ./install_faillock.sh uninstall — restore original configuration
 # =============================================================================
 
 set -e
@@ -67,7 +72,6 @@ install_package() {
 
     log_info "Installing package (silent)"
     opkg install --force-reinstall -V0 "$IPK_FILE" || log_error "opkg installation failed"
-    log_info "Package installed: OK"
 
     rm -f "$IPK_FILE"
 
@@ -227,49 +231,123 @@ verify() {
 }
 
 # =============================================================================
-# Rollback on error
+# Uninstall — restore original configuration
+# =============================================================================
+
+uninstall() {
+    printf "=============================================\n"
+    printf " pam_faillock uninstall — WAGO PFC200\n"
+    printf "=============================================\n\n"
+
+    log_warning "Restoring original configuration"
+
+    # Restore common-auth from backup
+    if [ -f "${COMMON_AUTH}.bak" ]; then
+        mv "${COMMON_AUTH}.bak" "$COMMON_AUTH"
+        log_info "common-auth restored from backup: OK"
+    else
+        log_warning "${COMMON_AUTH}.bak not found — common-auth not restored"
+    fi
+
+    # Remove faillock.conf
+    if [ -f "$FAILLOCK_CONF" ]; then
+        rm -f "$FAILLOCK_CONF"
+        log_info "faillock.conf removed: OK"
+    else
+        log_warning "faillock.conf not found — skipping"
+    fi
+
+    # Remove rc.d symlink
+    if [ -L "$RCD_LINK" ]; then
+        rm -f "$RCD_LINK"
+        log_info "rc.d symlink removed: OK"
+    else
+        log_warning "$RCD_LINK not found — skipping"
+    fi
+
+    # Remove init script
+    if [ -f "$INIT_SCRIPT" ]; then
+        rm -f "$INIT_SCRIPT"
+        log_info "Init script removed: OK"
+    else
+        log_warning "$INIT_SCRIPT not found — skipping"
+    fi
+
+    # Clear tally directory and all counters
+    if [ -d "$FAILLOCK_DIR" ]; then
+        rm -rf "$FAILLOCK_DIR"
+        log_info "Tally directory removed: OK"
+    else
+        log_warning "$FAILLOCK_DIR not found — skipping"
+    fi
+
+    # Note: pam_faillock.so is part of the PAM package — not removed here
+    log_warning "pam_faillock.so kept in /lib/security — remove manually if needed"
+
+    printf "\n"
+    printf "=============================================\n"
+    log_info "Uninstall completed successfully"
+    printf "=============================================\n\n"
+    log_warning "Please verify WBM and SSH connectivity"
+}
+
+# =============================================================================
+# Rollback on error during install
 # =============================================================================
 
 rollback() {
-    printf "${YELLOW}[WARN]${NC} %s\n" "=== ROLLBACK ==="
+    printf "${YELLOW}[WARN]${NC} %s\n" "=== ERROR — ROLLBACK ==="
     if [ -f "${COMMON_AUTH}.bak" ]; then
         mv "${COMMON_AUTH}.bak" "$COMMON_AUTH"
         printf "${YELLOW}[WARN]${NC} %s\n" "common-auth restored from backup"
     fi
-    printf "${YELLOW}[WARN]${NC} %s\n" "Rollback complete — please check connectivity"
+    printf "${RED}[ERROR]${NC} %s\n" "Installation failed — original configuration restored"
+    printf "${RED}[ERROR]${NC} %s\n" "Please check logs and connectivity"
 }
 
 # =============================================================================
 # Main
 # =============================================================================
 
-trap rollback ERR
+case "$1" in
+    uninstall)
+        check_root
+        uninstall
+        ;;
+    ""|install)
+        trap rollback ERR
 
-printf "=============================================\n"
-printf " pam_faillock installation — WAGO PFC200\n"
-printf " Reference: ANSSI-PG-078 R10\n"
-printf "=============================================\n\n"
+        printf "=============================================\n"
+        printf " pam_faillock installation — WAGO PFC200\n"
+        printf " Reference: ANSSI-PG-078 R10\n"
+        printf "=============================================\n\n"
 
-log_warning "Keep a root SSH session open in parallel before proceeding"
-printf "\n"
+        log_warning "Keep a root SSH session open in parallel before proceeding"
+        printf "\n"
 
-check_root
-check_user_authd
-check_pam
-install_package
-install_init_script
-create_tally_dir
-configure_faillock
-configure_pam
-verify
+        check_root
+        check_user_authd
+        check_pam
+        install_package
+        install_init_script
+        create_tally_dir
+        configure_faillock
+        configure_pam
+        verify
 
-printf "\n"
-printf "=============================================\n"
-log_info "Installation completed successfully"
-printf "=============================================\n\n"
-printf "Monitor logs:\n"
-printf "  tail -f /var/log/messages | grep -iE 'faillock|authd|pam'\n\n"
-printf "Unlock a user account manually:\n"
-printf "  rm -f /var/run/faillock/<username>\n\n"
-printf "Rollback manually:\n"
-printf "  mv %s.bak %s\n\n" "$COMMON_AUTH" "$COMMON_AUTH"
+        printf "\n"
+        printf "=============================================\n"
+        log_info "Installation completed successfully"
+        printf "=============================================\n\n"
+        printf "Monitor logs:\n"
+        printf "  tail -f /var/log/messages | grep -iE 'faillock|authd|pam'\n\n"
+        printf "Unlock a user account manually:\n"
+        printf "  rm -f /var/run/faillock/<username>\n\n"
+        printf "Uninstall and restore original configuration:\n"
+        printf "  %s uninstall\n\n" "$0"
+        ;;
+    *)
+        printf "Usage: %s [install|uninstall]\n" "$0"
+        exit 1
+        ;;
+esac
